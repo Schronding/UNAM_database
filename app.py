@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import random
 import string 
 import datetime
+from datetime import datetime
 
 # While I got a rudimentary working code using the strings of dates
 # it seems that people recommend using the library `datetime`. As 
@@ -60,7 +61,13 @@ def conn_to_postgres(query, params = None, fetch = False):
             cur.close()
         return None
 
-st_conn = st.connection("schronding", type = "sql")
+role_lst = ["schronding", "technology_coordinator", 
+"neurosciences_coordinator", "administrator", "school_services"]
+session_role = role_lst[1]
+# current_moment = datetime.now()
+# session_time = current_moment.strftime("%Y-%m-%d %H:%M:%S")
+st_conn = st.connection(f"{session_role}", type = "sql")
+# st_conn.query(f"INSERT INTO role_times(role_name, access_time) VALUES('{session_role}', '{session_time}');", ttl=0)
 st.title("UNAM Database")
 selected_option = st.sidebar.selectbox("Action", ["a. Students", 
 "b. Professors", "c. Regularity", "d. Approved", "e. Remaining", 
@@ -157,6 +164,8 @@ elif selected_option == "c. Regularity":
     # a career?" If not then df never touches this block and simply 
     # continues if the user is interested in regularity
 
+    # Now why I am not seeing the tables...
+
     has_regular = "Regulars" in choices
     has_irregular = "Irregulars" in choices
 
@@ -219,7 +228,7 @@ elif selected_option == "d. Approved":
             FROM taken_subjects ts
             JOIN subjects s ON s.id = ts.subject_id
             WHERE ts.student_id = {student_id}
-            AND ts.score >= 6;
+            AND acreditation = TRUE;
             """, ttl=0)
 
             # It seems that the problem is that I declared subjects
@@ -528,4 +537,9 @@ elif selected_option == "4. Insert":
 # streamlit is formatted in the YYYY-MM-DD format postgres wants. 
 # The other problem is that the math on the beginning year gets messy
 # I should probably just include another date_input there. 
+
+# It is a problem that every time I run the data, the things I did
+# manually dissapeared (a drawback of Jupyter I guess). 
+# As the names of the subjects are unique, I will use the notation to
+# look for the numbers instead of the ids, as the ids can change. 
  
