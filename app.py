@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import random
 import string 
 import datetime
-from datetime import datetime
+import datetime
 
 # While I got a rudimentary working code using the strings of dates
 # it seems that people recommend using the library `datetime`. As 
@@ -63,7 +63,7 @@ def conn_to_postgres(query, params = None, fetch = False):
 
 role_lst = ["schronding", "technology_coordinator", 
 "neurosciences_coordinator", "administrator", "school_services"]
-session_role = role_lst[1]
+session_role = role_lst[0]
 # current_moment = datetime.now()
 # session_time = current_moment.strftime("%Y-%m-%d %H:%M:%S")
 st_conn = st.connection(f"{session_role}", type = "sql")
@@ -453,13 +453,15 @@ elif selected_option == "4. Insert":
             nss = st.number_input("Social Security Number", min_value=10000)
             tutor_id = st.number_input("Tutor ID", min_value=1)
             beginning = st.date_input("Beginning of studies")
-            submited = st.form_submit_button()
             chosen_career = st.selectbox("Career", 
             ["Bachelor's in Technology", "Bachelor's in Neurosciences"])
             if chosen_career == "Bachelor's in Technology":
                 career_id = 1
             if chosen_career == "Bachelor's in Neurosciences":
                 career_id = 2
+            
+            submited = st.form_submit_button("Submit")
+
 
             if submited:
                 query_personal_info = """ 
