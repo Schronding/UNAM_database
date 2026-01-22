@@ -63,7 +63,7 @@ def conn_to_postgres(query, params = None, fetch = False):
 st_conn = st.connection("postgresql", type = "sql")
 st.title("UNAM Database")
 selected_option = st.sidebar.selectbox("Action", ["a. Students", 
-"b. Professors", "c. Regularity", "d. Approved", "e. Missing", 
+"b. Professors", "c. Regularity", "d. Approved", "e. Remaining", 
 "f. Subjects", "4. Insert"])
 
 # a. Consultar la lista de estudiantes inscritos totales y por plan de estudios.
@@ -77,24 +77,20 @@ selected_option = st.sidebar.selectbox("Action", ["a. Students",
 
 if selected_option == "a. Students":
     st.header("Total inscribed students")
-    all_students = st_conn.query("SELECT * FROM student_college_info;")
-    st.dataframe(all_students)
-    st.markdown("### Select Career")
-    selected_option = st.segmented_control("Career", 
-    ["Bachelor's in Technology", "Bachelor's in Neurosciences"])
-    if selected_option == "Bachelor's in Technology":
-        technology_students = st_conn.query("""
-        SELECT * FROM student_college_info sci
-        WHERE sci.career_id = 1;
-        """)
-        st.dataframe(technology_students)
+    view_choice = st.segmented_control("Views", 
+    ["Administrator", "Technology Coordinator", "Neurosciences Coordinator"])
+    
+    if view_choice == "Administrator":
+        df = st_conn.query("SELECT * FROM student_college_info;")
+        st.dataframe(df)
 
-    if selected_option == "Bachelor's in Neurosciences":
-        neuroscience_students = st_conn.query("""
-        SELECT * FROM student_college_info sci
-        WHERE sci.career_id = 2;
-        """)
-        st.dataframe(neuroscience_students)
+    if view_choice == "Technology Coordinator":
+        df = st_conn.query("SELECT * FROM technology_students;")
+        st.dataframe(df)
+
+    if view_choice == "Neurosciences Coordinator":
+        df = st_conn.query("SELECT * FROM neuroscience_students;")
+        st.dataframe(df)
     
 
 # Wow, I didn't expect it to be that easy. streamlit built a beautiful
@@ -110,6 +106,18 @@ if selected_option == "a. Students":
 # I honestly don't know what is the convenction on the "sweet spot" 
 # on the amount of tables a schema can have. 
 
+# I don't know where to put the views. I thought about creating a login
+# system, but for that I would need to change the website quite a bit. 
+# I think I should just built some SQL queries to show if each
+# role has or not the power to modify the database according to the
+# requisites. 
+
+# I cannot see the views when I reference them directly as tables, 
+# even though I can see that I created them on the psql terminal. 
+
+# The reason why I couldn't see it was rather dumb: I didn't change
+# the name of the variable from selected_option to view_choice
+
 elif selected_option == "b. Professors":
     st.header("All the professors of the ENES")
     all_professors = st_conn.query("SELECT * FROM professors;")
@@ -120,7 +128,7 @@ elif selected_option == "c. Regularity":
     choices = st.multiselect("Select the options", 
     ["Regulars", "Irregulars", 
     "Bachelor's in Technology", "Bachelor's in Neurosciences"])
-    students_college = st_conn.query(""" 
+    df = st_conn.query(""" 
     SELECT
         s.first_names,
         s.paternal_surname,
@@ -134,28 +142,30 @@ elif selected_option == "c. Regularity":
     ON s.id = sci.student_id;
     """)
 
-    if "Regulars" in choices:
-        st.dataframe(students_college[students_college.regularity == True])
-    if "Irregulars" in choices:
-        st.dataframe(students_college[students_college.regularity == False])
-    
-    if ( ("Regulars" in choices) and ("Irregulars" in choices) ) or ( ("Bachelor's in Neurosciences" in choices) and ("Bachelor's in Technology" in choices) ):
-        st.dataframe(students_college)
+    has_tech = "Bachelor's in Technology" in choices
+    has_neuro = "Bachelor's in Neurosciences" in choices
 
-    if "Bachelor's in Technology" in choices:
-        st.dataframe(students_college[students_college.career_id == 1])
-    if ("Bachelor's in Technology" in choices) and ("Regulars" in choices):
-        st.dataframe(students_college[students_college.career_id == 1, students_college.regularity == True])
-    if ("Bachelor's in Technology" in choices) and ("Irregulars" in choices):
-        st.dataframe(students_college[students_college.career_id == 1, students_college.regularity == False])
+    if has_tech or has_neuro:
+        if has_tech and not has_neuro:
+            df = df[df.career_id == 1]
+        elif has_neuro and not has_tech:
+            df = df[df.career_id == 2]
+    # This whole block asks the question "does the user want to check
+    # a career?" If not then df never touches this block and simply 
+    # continues if the user is interested in regularity
 
-    if ("Bachelor's in Neurosciences" in choices):
-        st.dataframe(students_college[students_college.career_id == 2])
-    if ("Bachelor's in Neurosciences" in choices) and ("Regulars" in choices):
-        st.dataframe(students_college[students_college.career_id == 2, students_college.regularity == True])
-    if ("Bachelor's in Neurosciences" in choices) and ("Irregulars" in choices):
-        st.dataframe(students_college[students_college.career_id == 2, students_college.regularity == False])
+    has_regular = "Regulars" in choices
+    has_irregular = "Irregulars" in choices
 
+    if has_regular or has_irregular:
+        if has_regular and not has_irregular:
+            df = df[df.regularity == True]
+        elif has_irregular and not has_regular:
+            df = df[df.regularity == False]
+
+    st.dataframe(df)
+    # It is so interesting to see that the option will all the filters
+    # is equal to the option with none!
     
 
     # It seems I don't even need to JOIN the tables, I can just 
@@ -190,6 +200,9 @@ elif selected_option == "c. Regularity":
     # It doesn't work as I expected. When I put both 'Regulars' and 
     # 'B's in Tec' I can still see students with career_id = 2. 
 
+    # I will rewrite this part with 4 selective filters, checking if
+    # each of the conditions is applied. 
+
 elif selected_option == "d. Approved":
     st.header("Approved subjects by each student")
 
@@ -200,11 +213,16 @@ elif selected_option == "d. Approved":
         if submited:
             approved_subjects = st_conn.query(f"""
             SELECT s.name, ts.score, ts.semester
-            FROM taken_subjects ts, subjects s
-            JOIN s.id = ts.subject_id
+            FROM taken_subjects ts
+            JOIN subjects s ON s.id = ts.subject_id
             WHERE ts.student_id = {student_id}
             AND ts.score >= 6;
             """)
+
+            # It seems that the problem is that I declared subjects
+            # in the FROM, but I should have actually done it on the
+            # JOIN clause. The problem seems to be that I can only
+            # work on one relation at a time
 
             st.dataframe(approved_subjects)
 
@@ -226,12 +244,34 @@ elif selected_option == "e. Remaining":
         student_id = st.number_input("Student ID", min_value=1, step=1)
         submitted = st.form_submit_button("Check remaining subjects")
         if submitted:
-            career_check = conn_to_postgres(f"""
+            career_check = st_conn.query(f""" 
             SELECT career_id
-            FROM student_college_info 
+            FROM student_college_info
             WHERE student_id = {student_id};
-            """, fetch=True)
-            print(career_check)
+            """)
+            if not career_check.empty:
+            # I got the error ValueError: 
+            # The truth value of a DataFrame is ambiguous. 
+            # Use a.empty, a.bool(), a.item(), a.any() or a.all().
+                career_id = career_check.iloc[0]['career_id']
+                # iloc is just a way to reference a dataframe as if 
+                # it was a list: by making use of its index. 
+
+                all_subjects = st_conn.query(f"""
+                SELECT name, credits, semester
+                FROM subjects
+                WHERE career = {career_id}
+                AND id NOT IN (
+                    SELECT subject_id
+                    FROM taken_subjects
+                    WHERE student_id = {student_id}
+                    AND score >= 6
+                )
+                ORDER BY semester ASC;
+                """)
+
+                st.dataframe(all_subjects)
+
 
 
 
@@ -292,7 +332,7 @@ elif selected_option == "4. Insert":
     option = st.segmented_control("You want to create a...", ["Student", "Professor"])
     if option == "Professor":
         with st.form("insert_new_professor"):
-            names_lst = st.text_input("First names", max_chars=100)
+            names = st.text_input("First names", max_chars=100)
             pat_surname = st.text_input("Paternal surname", max_chars=100)
             mat_surname = st.text_input("Maternal surname", max_chars=100)
             submited = st.form_submit_button()
@@ -302,7 +342,7 @@ elif selected_option == "4. Insert":
                 VALUES(%s, %s, %s);
                 """)
 
-                professor_values = (names_lst, pat_surname, mat_surname)
+                professor_values = (names, pat_surname, mat_surname)
                 conn_to_postgres(insert_professor_query, professor_values)
                 st.success("Student created succesfully")
 
@@ -313,8 +353,21 @@ elif selected_option == "4. Insert":
             pat_surname = st.text_input("Paternal surname", max_chars=100)
             mat_surname = st.text_input("Maternal surname", max_chars=100)
             nationality = st.selectbox("Nationality", nationalities_lst)
-            curp = st.text_input("CURP", max_chars=30)
-            birth_date = st.date_input("Birth date")
+            curp = upper(st.text_input("CURP", max_chars=18))
+            # It seems that streamlit doesn't have a function to force 
+            # uppercase on the frontend, but at least I will do it for the 
+            # data base. 
+
+            min_date = datetime.date(1926, 1, 1)
+            # I think few people would continue studying while being
+            # a hundred years old
+            max_date = datetime.date.today()
+            # I didn't know, but I can put min and max values in date_input
+            # just like in the other kinds of inputs. I will make use of the
+            # datetime library to create the upper and lower bounds
+            birth_date = st.date_input("Birth date", 
+            min_value=min_date, max_value=max_date)
+            
             email = st.text_input("Personal email")
             telephone = st.text_input("Personal phone number", max_chars=15)
             state_dic = {'AG': 'AS', 'JAL': 'JC', 'MEX': 'CDMX', 'PUE': 'PL', 'QRO': 'QRO'}   
