@@ -5,7 +5,12 @@ import psycopg
 from dotenv import load_dotenv
 import random
 import string 
+import datetime
 
+# While I got a rudimentary working code using the strings of dates
+# it seems that people recommend using the library `datetime`. As 
+# I don't see any pip install command I will assume it is built in
+# python. 
 
 status_lst = ['active', 'temporal_leave', 'definite_leave', 'graduated', 'titulated']
 names_lst = ['Jose', 'Mario', 'Rogelio', 'Yamil', 'Hector', 'Alicia','Paola', 'Valeria', 'Valentina', 'Maria']
@@ -131,21 +136,24 @@ elif selected_option == "c. Regularity":
 
     if "Regulars" in choices:
         st.dataframe(students_college[students_college.regularity == True])
-    if choices == "Irregulars":
+    if "Irregulars" in choices:
         st.dataframe(students_college[students_college.regularity == False])
-    if (choices == "Regulars" and choices == "Irregulars") or (choices == "Bachelor's in Neurosciences" and choices == "Bachelor's in Technology"):
+    
+    if ( ("Regulars" in choices) and ("Irregulars" in choices) ) or ( ("Bachelor's in Neurosciences" in choices) and ("Bachelor's in Technology" in choices) ):
         st.dataframe(students_college)
-    if choices == "Bachelor's in Technology":
+
+    if "Bachelor's in Technology" in choices:
         st.dataframe(students_college[students_college.career_id == 1])
-    if choices == "Bachelor's in Neurosciences":
-        st.dataframe(students_college[students_college.career_id == 2])
-    if choices == "Bachelor's in Technology" and choices == "Regulars":
+    if ("Bachelor's in Technology" in choices) and ("Regulars" in choices):
         st.dataframe(students_college[students_college.career_id == 1, students_college.regularity == True])
-    if choices == "Bachelor's in Technology" and choices == "Irregulars":
+    if ("Bachelor's in Technology" in choices) and ("Irregulars" in choices):
         st.dataframe(students_college[students_college.career_id == 1, students_college.regularity == False])
-    if choices == "Bachelor's in Neurosciences" and choices == "Regulars":
+
+    if ("Bachelor's in Neurosciences" in choices):
+        st.dataframe(students_college[students_college.career_id == 2])
+    if ("Bachelor's in Neurosciences" in choices) and ("Regulars" in choices):
         st.dataframe(students_college[students_college.career_id == 2, students_college.regularity == True])
-    if choices == "Bachelor's in Neurosciences" and choices == "Irregulars":
+    if ("Bachelor's in Neurosciences" in choices) and ("Irregulars" in choices):
         st.dataframe(students_college[students_college.career_id == 2, students_college.regularity == False])
 
     
@@ -179,16 +187,23 @@ elif selected_option == "c. Regularity":
     # check what options are available (or put the whole list such as
     # choices == ['attribute1', 'attribute2']). 
 
+    # It doesn't work as I expected. When I put both 'Regulars' and 
+    # 'B's in Tec' I can still see students with career_id = 2. 
+
 elif selected_option == "d. Approved":
     st.header("Approved subjects by each student")
+
     with st.form("approved_subjects"):
-        student_id = st.text_input("What student do you wish to look up?")
+        student_id = st.text_input("Type student ID")
         submited = st.form_submit_button("Look up")
+
         if submited:
             approved_subjects = st_conn.query(f"""
-            SELECT * FROM taken_subjects 
-            WHERE {student_id} = student_id 
-            AND acreditation = TRUE;
+            SELECT s.name, ts.score, ts.semester
+            FROM taken_subjects ts, subjects s
+            JOIN s.id = ts.subject_id
+            WHERE ts.student_id = {student_id}
+            AND ts.score >= 6;
             """)
 
             st.dataframe(approved_subjects)
@@ -201,6 +216,9 @@ elif selected_option == "d. Approved":
 # Indeed it needs to be put there, but not as I thought. To work 
 # corretly form, the button and the input text (which I did not put)
 # must be inside a with block. 
+
+# I wonder when I should put the diminituve of the table. From the
+# code I have seen online, it seems inconsequential. 
 
 elif selected_option == "e. Remaining":
     st.markdown("# Subjects to be accredited")
@@ -236,25 +254,38 @@ elif selected_option == "e. Remaining":
 
 elif selected_option == "f. Subjects":
     st.markdown("# Subjects that the professor taught")
-    with st.form("professor_id"):
-        professor = st.form("What professor do you wish to look up?")
+    with st.form("professor_subjects_search"):
+        professor_id = st.number_input("Type the professor ID", min_value=1, step=1)
         submited = st.form_submit_button("Look up")
+
         if submited:
-            complete_clases = st_conn.query("""
-            JOIN subjects s, professors p , classes c AS
-            complete_clases
-            c.professor_id,
-            s.name,
-            p.first_names,
-            p.paternal_surname,
-            p.maternal_surname, 
-            c.semester,
-            s.credits;
+            complete_clases = st_conn.query(f"""
+            SELECT
+                pro.first_names,
+                pro.paternal_surname,
+                pro.maternal_surname, 
+                sub.name
+                cla.semester
+            FROM professors pro
+            JOIN classes cla ON pro.id = cla.professor_id
+            JOIN subjects sub ON sub.id = cla.subject_id 
+            WHERE pro.id = {professor_id}; 
             """)
-            taught_subjects = st_conn.query(""" 
-            SELECT * FROM complete_clases
-            WHERE professor = professor_id;
-            """)
+
+            st.dataframe(complete_clases)
+
+# It seems that the JOIN clauses must come after, and that I need
+# a total number of JOIN clauses equal to (number_of_tables - 1) times
+
+# While my logic would tell me that I need to join something before
+# taking a group from it, in seems that in postgres it goes in reverse; 
+# first are the SELECT clauses, then the JOIN ones. 
+
+# I got an error that wasn't solved by correcting the inconsistent
+# uses of pro as p... The problem with the library as that even though
+# it helps me hide a lot of the background work, the error messages
+# are painfully long and it is difficult for me to pinpoint what
+# the real mistake is. 
 
 elif selected_option == "4. Insert":
     st.markdown("# Insert new professors or students")
@@ -273,13 +304,15 @@ elif selected_option == "4. Insert":
 
                 professor_values = (names_lst, pat_surname, mat_surname)
                 conn_to_postgres(insert_professor_query, professor_values)
+                st.success("Student created succesfully")
+
 
     if option == "Student":
         with st.form("insert_new_student"): 
-            names_lst = st.text_input("First names", max_chars=100)
+            names = st.text_input("First names", max_chars=100)
             pat_surname = st.text_input("Paternal surname", max_chars=100)
             mat_surname = st.text_input("Maternal surname", max_chars=100)
-            nationality = st.selectbox("Pick one", nationalities_lst)
+            nationality = st.selectbox("Nationality", nationalities_lst)
             curp = st.text_input("CURP", max_chars=30)
             birth_date = st.date_input("Birth date")
             email = st.text_input("Personal email")
@@ -291,11 +324,19 @@ elif selected_option == "4. Insert":
             street = st.text_input("Street")
             ext_num = st.number_input("External number", min_value=1)
             zipcode = st.number_input("Zip Code", min_value=1)
-            maritalstatus = st.radio("Pick one", maritalstatus_lst)
-            bloodtype = st.pills("Pick one", bloodtypes_lst)
+            marital_status = st.radio("Marital Status", maritalstatus_lst)
+            blood_type = st.pills("Blood Type", bloodtypes_lst)
             nss = st.number_input("Social Security Number", min_value=10000)
             tutor_id = st.number_input("Tutor ID", min_value=1)
+            beginning = st.date_input("Beginning of studies")
             submited = st.form_submit_button()
+            chosen_career = st.selectbox("Career", 
+            ["Bachelor's in Technology", "Bachelor's in Neurosciences"])
+            if chosen_career == "Bachelor's in Technology":
+                career_id = 1
+            if chosen_career == "Bachelor's in Neurosciences":
+                career_id = 2
+
             if submited:
                 query_personal_info = """ 
                 INSERT INTO students(
@@ -312,9 +353,9 @@ elif selected_option == "4. Insert":
                 RETURNING id; 
                 """
 
-                person_data = (chosen_name, chs_pat_name, chs_mat_name, nationality, 
-                chs_curp, birth_date, email, telephone, city, state, street, ext_num,
-                zipcode, marital_status, blood_type, nss, tutor)
+                person_data = (names, pat_surname, mat_surname, nationality, 
+                curp, birth_date, email, telephone, city, state, street, ext_num,
+                zipcode, marital_status, blood_type, nss, tutor_id)
 
                 student_id = conn_to_postgres(query_personal_info, 
                 params = person_data, fetch = True)
@@ -329,14 +370,28 @@ elif selected_option == "4. Insert":
                 """
 
                 code = random.randint(100000000, 999999999)
-                beginning = str(int(birth_date[:4]) + 20) + birth_date[4:]
-                ins_email = f"{chosen_name}.{code}@comunidad.unam.mx"
-                status = random.choice(status_lst)
+                ins_email = f"{names}.{code}@comunidad.unam.mx"
+                status = status_lst[0]
+                isregular = True
+                titulation = None
+                # I will leave every new student simply as active, as it
+                # doesn't make sense to have other status for a new 
+                # student. I should probably move these up, as for them to
+                # be formatted one after the other... beginning is the only
+                # part that is going to be formatted to the page. I will move
+                # just that. 
 
-                college_data = (student_id, plan_id, code, beginning, 1,
-                status, isregular, ins_email, 0, None)
+                college_data = (student_id, career_id, code, beginning, 1,
+                status, isregular, ins_email, 0, titulation)
 
                 conn_to_postgres(query_college_info, college_data)
+
+                st.success("Student created succesfully")
+                # Lets see how this method renders. It looks good. 
+
+                # I need to force uppercase on CURP. 
+                # The calendar just goes 10 years before and after, 
+                # I need to expand the range at least on birth date. 
 
 # Just as in number_input you can put a minimum value, with
 # text_input I can put a limit on characters! I will simply put the
@@ -350,5 +405,9 @@ elif selected_option == "4. Insert":
 # and lists that are not on `app.py` but on `main.ipynb`. For that 
 # reason I will just put all the lists on top of the file
 
-
+# There is an error on my insert logic related to the birthdate. 
+# First of all, I don't even know if the data I obtained from 
+# streamlit is formatted in the YYYY-MM-DD format postgres wants. 
+# The other problem is that the math on the beginning year gets messy
+# I should probably just include another date_input there. 
  
