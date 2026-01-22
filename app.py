@@ -60,7 +60,7 @@ def conn_to_postgres(query, params = None, fetch = False):
             cur.close()
         return None
 
-st_conn = st.connection("postgresql", type = "sql")
+st_conn = st.connection("schronding", type = "sql")
 st.title("UNAM Database")
 selected_option = st.sidebar.selectbox("Action", ["a. Students", 
 "b. Professors", "c. Regularity", "d. Approved", "e. Remaining", 
@@ -220,7 +220,7 @@ elif selected_option == "d. Approved":
             JOIN subjects s ON s.id = ts.subject_id
             WHERE ts.student_id = {student_id}
             AND ts.score >= 6;
-            """)
+            """, ttl=0)
 
             # It seems that the problem is that I declared subjects
             # in the FROM, but I should have actually done it on the
@@ -350,7 +350,7 @@ elif selected_option == "4. Insert":
                 st.success("Professor created succesfully")
 
                 st.rerun()
-                
+
                 # While it says that the professor was created I
                 # don't see it in the table of all the professors
                 # of the ENES. When I go to the database I
