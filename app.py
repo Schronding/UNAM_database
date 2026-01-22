@@ -81,7 +81,10 @@ if selected_option == "a. Students":
     ["Administrator", "Technology Coordinator", "Neurosciences Coordinator"])
     
     if view_choice == "Administrator":
-        df = st_conn.query("SELECT * FROM student_college_info;")
+        df = st_conn.query("SELECT * FROM student_college_info;", ttl = 0)
+        # Here I need to put the same time to live as professors, 
+        # because if I do not I will continue to see the cached 
+        # version of the query. 
         st.dataframe(df)
 
     if view_choice == "Technology Coordinator":
@@ -120,7 +123,7 @@ if selected_option == "a. Students":
 
 elif selected_option == "b. Professors":
     st.header("All the professors of the ENES")
-    all_professors = st_conn.query("SELECT * FROM professors;")
+    all_professors = st_conn.query("SELECT * FROM professors;", ttl=0)
     st.dataframe(all_professors)
 
 elif selected_option == "c. Regularity":
@@ -304,7 +307,7 @@ elif selected_option == "f. Subjects":
                 pro.first_names,
                 pro.paternal_surname,
                 pro.maternal_surname, 
-                sub.name
+                sub.name,
                 cla.semester
             FROM professors pro
             JOIN classes cla ON pro.id = cla.professor_id
@@ -344,8 +347,66 @@ elif selected_option == "4. Insert":
 
                 professor_values = (names, pat_surname, mat_surname)
                 conn_to_postgres(insert_professor_query, professor_values)
-                st.success("Student created succesfully")
+                st.success("Professor created succesfully")
 
+                st.rerun()
+                
+                # While it says that the professor was created I
+                # don't see it in the table of all the professors
+                # of the ENES. When I go to the database I
+                # have the duplication of the last professor though. 
+                # Could it be that it runs the queries just once 
+                # and that is the reason why it doesn't change? 
+                # This is interesting, when I closed and reopened
+                # the streamlit web page the last profesor (Criseida)
+                # now appears, but the new I just created doesn't. 
+                # I think this could be the exercise where I prove
+                # that school_services and the coordinators cannot
+                # delete the entry. 
+
+                # I am getting the error
+                # postgres=# \c unam_database schronding;
+                #  connection to server on socket 
+                # "/var/run/postgresql/.s.PGSQL.5432" failed: 
+                # FATAL:  Peer authentication failed for user 
+                # "schronding" Previous connection kept
+
+                # I think it might be because I am running the web
+                # page and this already has the schronding user
+                # enabled. 
+
+                # It seems that isn't the reason, as when I stop the
+                # web page it doesn't allow me to enter either. 
+                # I should be able to enter with the other roles
+                # though. 
+
+                # Maybe it is the port. As no role can connect.
+                # 
+                # I don't know how to delete a tuple. When I typed
+                # unam_database=# DELETE * FROM professors
+                # unam_database-# WHERE id = 11;
+                # ERROR:  syntax error at or near "*"
+                # LINE 1: DELETE * FROM professors
+                #                ^
+                # I was able to enter with a separate role though. 
+
+# I am confused at why I am unable to acess the professors table
+# unam_database=> SELECT * FROM students;
+# ERROR:  permission denied for table students
+# unam_database=> SELECT * FROM professors;
+# ERROR:  permission denied for table professors
+# unam_database=> SELECT * FROM technology_students 
+# unam_database-> ;
+# ERROR:  permission denied for view technology_students
+# I granted access to the views
+# ```SQL
+# GRANT SELECT ON professors TO technology_coordinator, neurosciences_coordinator;
+# GRANT
+# ```
+# It seems I have not granted usage nor connection to both those
+# roles. 
+
+ 
 
     if option == "Student":
         with st.form("insert_new_student"): 
@@ -353,7 +414,8 @@ elif selected_option == "4. Insert":
             pat_surname = st.text_input("Paternal surname", max_chars=100)
             mat_surname = st.text_input("Maternal surname", max_chars=100)
             nationality = st.selectbox("Nationality", nationalities_lst)
-            curp = upper(st.text_input("CURP", max_chars=18))
+            curp = st.text_input("CURP", max_chars=18)
+            curp = curp.upper()
             # It seems that streamlit doesn't have a function to force 
             # uppercase on the frontend, but at least I will do it for the 
             # data base. 
@@ -441,6 +503,9 @@ elif selected_option == "4. Insert":
 
                 st.success("Student created succesfully")
                 # Lets see how this method renders. It looks good. 
+
+                st.rerun()
+                # In case the ttl argument fails. 
 
                 # I need to force uppercase on CURP. 
                 # The calendar just goes 10 years before and after, 
